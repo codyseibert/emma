@@ -7,9 +7,11 @@ import {
 } from 'uuid';
 import fs from 'fs';
 import  {
-  MongoClient, ServerApiVersion 
+  MongoClient, 
 } from 'mongodb'
-
+import 
+Mustache
+  from 'mustache'
 class ValidationError extends Error {
   constructor(message: string) {
     super(message);
@@ -26,8 +28,6 @@ export default async function ({
   const app = express();
   app.use(express.json());
 
-  console.log('mongoUrl', mongoUrl)
-
   let cache: any, scope: any, req: Request, res: Response;
 
   // eslint-disable-next-line prefer-const
@@ -41,20 +41,19 @@ export default async function ({
     set(cb: any) {
       return () => {
         Object.assign(scope, cb(scope));
-        return [req, res];
       };
     },
-    query(cb: (scope: any) => [string, object, (results: any) => any]) {
-      console.log('query')
+    query(cb: (scope: any) => [collectionName: string, query: any, scopeSetter: (results: any) => any]) {
       return async () => {
         const [collectionName, query, scopeSetter] = cb(scope);
-        console.log({
-          collectionName,
-          query
-        })
         const collection = db.collection(collectionName);
-        const results = await collection.find(query).toArray();
-        console.log(results)
+        const limit = query.limit;
+        delete query.limit;
+        let builder = collection.find(query);
+        if (limit) {
+          builder = builder.limit(limit);
+        }
+        const results = await builder.toArray();
         Object.assign(scope, scopeSetter(results))
       };
     },
@@ -62,9 +61,7 @@ export default async function ({
       return async () => {
         const [collectionName, object] = cb(scope);
         const collection = db.collection(collectionName);
-        console.log('object', object)
         const result = await collection.insertOne(object);
-        console.log('result', result)
         return result;
       };
     },
@@ -109,9 +106,13 @@ export default async function ({
       });
     },
     template(cb: () => string) {
-      const templatePath = cb();
-      return fs.readFile(templatePath, 'utf-8', (err: any, data: any) => {
-        res.sendFile(data);
+      return () => new Promise<void>((resolve) => {
+        const templatePath = cb();
+        console.log('templatePath', templatePath)
+        fs.readFile(templatePath, 'utf-8', (err: any, file: any) => {
+          const rendered = Mustache.render(file, scope);
+          res.send(rendered);
+        });
       })
     },
     post(endpoint: string, actions: any[]) {
