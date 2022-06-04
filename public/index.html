@@ -4,28 +4,34 @@
   </head>
     
   <body>
-    <h1>TODO APP</h1>
-
-    <div id="todo-items"></div>
-
-    <input type="text" id="todo-text"/>
-    <button id="save-btn">Save</button>
-
+    <div id="app"></div>
+    
     <script type="module">
       import {html, render} from 'https://unpkg.com/lit-html?module';
 
       const saveBtn = document.getElementById('save-btn');
       const todoInput = document.getElementById('todo-text');
       const todoItems = window.scope.todos;
+      let text = '';
 
       const rerender = (todos) => {
         render(html`
-          <ul>
-            ${todos.map(todo => html`
-              <li data-id="${todo._id}">${todo.text} <button @click=${(e) => deleteTodoItem(todo._id)}>Delete</button></li>
-            `)}
-          </ul>
-        `, document.getElementById('todo-items'));
+          <h1>TODO APP</h1>
+          <div>
+            <ul>
+              ${todos.map(todo => html`
+                <li
+                  data-id="${todo._id}">
+                  ${todo.text} <button @click=${(e) => deleteTodoItem(todo._id)}>Delete</button>
+                </li>
+              `)}
+            </ul>
+          </div>
+          <input @keyup=${e => {
+            text = e.target.value;
+          }} type="text" id="todo-text"/>
+          <button @click=${e => createTodo()}>Save</button>
+        `, document.getElementById('app'));
       };
 
       const deleteTodoItem = async (todoId) => {
@@ -36,8 +42,8 @@
         todoItem.remove();
       }
 
-      saveBtn.addEventListener('click', async () => {
-        const todoText = todoInput.value;
+      const createTodo = async () => {
+        const todoText = text;
         const newTodo = await fetch('/api/todos', {
           method: 'POST',
           headers: {
@@ -50,7 +56,7 @@
         }).then(res => res.json());
         todoItems.push(newTodo)
         rerender(todoItems);
-      });
+      };
 
       rerender(todoItems);
     </script>
