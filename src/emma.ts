@@ -19,6 +19,14 @@ class ValidationError extends Error {
   }
 }
 
+type Context = {
+  req: Request,
+  res: Response,
+  scope: any,
+}
+
+type Action = (context: Context) => any;
+
 export default async function ({
   mongoUrl, database
 }: {
@@ -28,7 +36,7 @@ export default async function ({
   const app = express();
   app.use(express.json());
 
-  let cache: any, scope: any, req: Request, res: Response;
+  let cache: any, req: Request, res: Response;
 
   // eslint-disable-next-line prefer-const
   cache = {};
@@ -39,12 +47,23 @@ export default async function ({
 
   return {
     set(cb: any) {
-      return () => {
+      return ({
+        scope
+      }: Context) => {
         Object.assign(scope, cb(scope));
       };
     },
+    scope(data: any) {
+      return async ({
+        scope
+      }: Context) => {
+        Object.assign(scope, data)
+      }
+    },
     query(cb: (scope: any) => [collectionName: string, query: any, scopeSetter: (results: any) => any]) {
-      return async () => {
+      return async ({
+        scope
+      }: Context) => {
         const [collectionName, query, scopeSetter] = cb(scope);
         const collection = db.collection(collectionName);
         const limit = query.limit;
@@ -58,7 +77,9 @@ export default async function ({
       };
     },
     persist(cb: (scope: any) => [string, object]) {
-      return async () => {
+      return async ({
+        scope
+      }: Context) => {
         const [collectionName, object] = cb(scope);
         const collection = db.collection(collectionName);
         const result = await collection.insertOne(object);
@@ -66,35 +87,50 @@ export default async function ({
       };
     },
     uuid(cb: (scope: any) => any[]) {
-      return () => {
+      return ({
+        scope
+      }: Context) => {
         const [obj, key] = cb(scope);
         obj[key] = uuidv4();
         return [req, res];
       };
     },
     fromCache(cb: (cache: any) => object) {
-      return () => {
+      return ({
+        scope
+      }: Context) => {
         Object.assign(scope, cb(cache));
         return [req, res];
       };
     },
     body(cb: (b: any) => object) {
-      return () => {
+      return ({
+        scope
+      }: Context) => {
         Object.assign(scope, cb(req.body));
         return [req, res];
       };
     },
-    log(cb: (message: any) => string) {
-      return () => cb(scope);
+    log(cb: (scope: any) => string) { // called in index
+      return ({
+        scope
+      }: Context) => { // called from emma
+        const message = cb(scope); // defined in index
+        console.log(message);
+      }
     },
-    get(endpoint: string, actions: any[]) {
+    get(endpoint: string, actions: Action[]) {
       app.get(endpoint, async (request: Request, response: Response) => {
-        scope = {};
+        const scope = {}
         req = request;
         res = response;
         try {
           for (const action of actions) {
-            await action([req, res]);
+            await action({
+              req,
+              res,
+              scope
+            });
           }
         } catch (err: any) {
           if (err.name === 'ValidationError') {
@@ -106,7 +142,9 @@ export default async function ({
       });
     },
     template(cb: () => string) {
-      return () => new Promise<void>((resolve) => {
+      return ({
+        scope
+      }: Context) => new Promise<void>((resolve) => {
         const templatePath = cb();
         console.log('templatePath', templatePath)
         fs.readFile(templatePath, 'utf-8', (err: any, file: any) => {
@@ -115,14 +153,18 @@ export default async function ({
         });
       })
     },
-    post(endpoint: string, actions: any[]) {
+    post(endpoint: string, actions: Action[]) {
       app.post(endpoint, async (request: Request, response: Response) => {
-        scope = {};
+        const scope = {};
         req = request;
         res = response;
         try {
           for (const action of actions) {
-            await action([req, res]);
+            await action({
+              req,
+              res,
+              scope
+            });
           }
         } catch (err: any) {
           if (err.name === 'ValidationError') {
@@ -134,13 +176,17 @@ export default async function ({
       });
     },
     toCache: (cb: (scope: any, cache: any) => object) => {
-      return () => {
+      return ({
+        scope
+      }: Context) => {
         Object.assign(cache, cb(scope, cache));
         return [req, res];
       };
     },
     validate: (cb: (scope: any) => any[]) => {
-      return () => {
+      return ({
+        scope
+      }: Context) => {
         const [objectToValidate, schemaObject] = cb(scope);
         for (const key in schemaObject) {
           const value = schemaObject[key];
@@ -170,7 +216,9 @@ export default async function ({
       };
     },
     response(cb: (scope: any) => [number, object]) {
-      return () => {
+      return ({
+        req, res, scope
+      }: Context) => {
         const [statusCode, jsonResponse] = cb(scope);
         res.status(statusCode).json(jsonResponse);
       };

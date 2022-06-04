@@ -21,6 +21,7 @@ async function main() {
     body,
     get,
     response,
+    scope,
     log,
     start,
   } = await emma({
@@ -34,10 +35,10 @@ async function main() {
   };
 
   get('/', [
-    set(() => ({
+    scope({
       name: 'bob',
       age: 25,
-    })),
+    }),
     template(() => path.resolve(__dirname, '../templates/index.mustache')),
   ]);
 
@@ -64,6 +65,13 @@ async function main() {
     persist((scope) => ['todos', scope.todo]),
     response((scope) => [200, scope.todo]),
   ]);
+
+  get('/api/log', [
+    log(scope => 'hello world' + scope.name),
+    response(() => [200, {
+      text: 'yolo'
+    }]),
+  ])
 
   console.log('starting server on port 8080');
   start(8080);
