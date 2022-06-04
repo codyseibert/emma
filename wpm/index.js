@@ -36,7 +36,7 @@ const getDurationInMinutes = (ytId) => {
 }
 
 (async () => {
-  const ytId = 'TCEgdiN0A8s';
+  const ytId = process.argv[2];
   // const ytId = 'korRfKTDoxE';
   // korRfKTDoxE learnwebcode
   const subs = await getSubtitles(ytId);
