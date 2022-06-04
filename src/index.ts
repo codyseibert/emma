@@ -3,6 +3,9 @@ import {
   config 
 } from 'dotenv';
 import path from 'path';
+import {
+  ObjectId 
+} from 'mongodb';
 config();
 
 type Todo = {
@@ -11,6 +14,7 @@ type Todo = {
 };
 
 async function main() {
+  console.log(`mongodb+srv://${process.env.MONGO_USER}:${process.env.MONGO_PASS}@cluster0.w7djj.mongodb.net/?retryWrites=true&w=majority`)
   const {
     persist,
     template,
@@ -19,14 +23,17 @@ async function main() {
     validate,
     post,
     body,
+    params,
+    remove,
     get,
     response,
+    destroy,
     scope,
     log,
     start,
   } = await emma({
-    mongoUrl: `mongodb+srv://${process.env.MONGO_USER}:${process.env.MONGO_PASS}@testing-mongo.db09wpw.mongodb.net/?retryWrites=true&w=majority`,
-    database: 'testing',
+    mongoUrl: `mongodb+srv://${process.env.MONGO_USER}:${process.env.MONGO_PASS}@cluster0.w7djj.mongodb.net/?retryWrites=true&w=majority`,
+    database: `${process.env.MONGO_DB}`,
   });
 
   const todoSchema = {
@@ -35,11 +42,12 @@ async function main() {
   };
 
   get('/', [
-    scope({
-      name: 'bob',
-      age: 25,
-    }),
-    template(() => path.resolve(__dirname, '../templates/index.mustache')),
+    query(() => ['todos', {}, (results) => ({
+      todos: results 
+    })]),
+    template(() =>
+      path.resolve(__dirname, '../public/index.html')
+    ),
   ]);
 
   get('/api/todos', [
@@ -47,7 +55,7 @@ async function main() {
     query((scope) => [
       'todos',
       {
-        limit: 2
+        limit: 2,
       },
       (todos) => ({
         ...scope,
@@ -55,6 +63,25 @@ async function main() {
       }),
     ]),
     response((scope) => [200, scope.todos]),
+  ]);
+
+  destroy('/api/todos/:id', [
+    params(({
+      id
+    }) => ({
+      id
+    })),
+    remove((scope) => [
+      'todos',
+      {
+        _id: new ObjectId(scope.id),
+      },
+      (results) => ({
+        ...scope,
+        results,
+      }),
+    ]),
+    response((scope) => [200, scope.results]),
   ]);
 
   post('/api/todos', [
@@ -67,11 +94,14 @@ async function main() {
   ]);
 
   get('/api/log', [
-    log(scope => 'hello world' + scope.name),
-    response(() => [200, {
-      text: 'yolo'
-    }]),
-  ])
+    log((scope) => 'hello world' + scope.name),
+    response(() => [
+      200,
+      {
+        text: 'yolo',
+      },
+    ]),
+  ]);
 
   console.log('starting server on port 8080');
   start(8080);

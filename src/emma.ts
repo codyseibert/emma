@@ -45,6 +45,29 @@ export default async function ({
   await client.connect();
   const db = client.db(database);
 
+  const setupRoute = (method: string, endpoint: string, actions: Action[]) => {
+    (app as any)[method](endpoint, async (request: Request, response: Response) => {
+      const scope = {}
+      req = request;
+      res = response;
+      try {
+        for (const action of actions) {
+          await action({
+            req,
+            res,
+            scope
+          });
+        }
+      } catch (err: any) {
+        if (err.name === 'ValidationError') {
+          res.status(400).send(err.message);
+        } else {
+          res.status(500).send(err.message);
+        }
+      }
+    });
+  }
+
   return {
     set(cb: any) {
       return ({
@@ -73,6 +96,16 @@ export default async function ({
           builder = builder.limit(limit);
         }
         const results = await builder.toArray();
+        Object.assign(scope, scopeSetter(results))
+      };
+    },
+    remove(cb: (scope: any) => [collectionName: string, query: any, scopeSetter: (results: any) => any]) {
+      return async ({
+        scope
+      }: Context) => {
+        const [collectionName, query, scopeSetter] = cb(scope);
+        const collection = db.collection(collectionName);
+        const results = await collection.deleteMany(query);
         Object.assign(scope, scopeSetter(results))
       };
     },
@@ -120,26 +153,7 @@ export default async function ({
       }
     },
     get(endpoint: string, actions: Action[]) {
-      app.get(endpoint, async (request: Request, response: Response) => {
-        const scope = {}
-        req = request;
-        res = response;
-        try {
-          for (const action of actions) {
-            await action({
-              req,
-              res,
-              scope
-            });
-          }
-        } catch (err: any) {
-          if (err.name === 'ValidationError') {
-            res.status(400).send(err.message);
-          } else {
-            res.status(500).send(err.message);
-          }
-        }
-      });
+      setupRoute('get', endpoint, actions);
     },
     template(cb: () => string) {
       return ({
@@ -148,32 +162,16 @@ export default async function ({
         const templatePath = cb();
         console.log('templatePath', templatePath)
         fs.readFile(templatePath, 'utf-8', (err: any, file: any) => {
-          const rendered = Mustache.render(file, scope);
-          res.send(rendered);
+          file = file.replace('<script>', `<script>window.scope = ${JSON.stringify(scope)};`);
+          res.send(file);
         });
       })
     },
     post(endpoint: string, actions: Action[]) {
-      app.post(endpoint, async (request: Request, response: Response) => {
-        const scope = {};
-        req = request;
-        res = response;
-        try {
-          for (const action of actions) {
-            await action({
-              req,
-              res,
-              scope
-            });
-          }
-        } catch (err: any) {
-          if (err.name === 'ValidationError') {
-            res.status(400).send(err.message);
-          } else {
-            res.status(500).send(err.message);
-          }
-        }
-      });
+      setupRoute('post', endpoint, actions);
+    },
+    destroy(endpoint: string, actions: Action[]) {
+      setupRoute('delete', endpoint, actions);
     },
     toCache: (cb: (scope: any, cache: any) => object) => {
       return ({
@@ -181,6 +179,13 @@ export default async function ({
       }: Context) => {
         Object.assign(cache, cb(scope, cache));
         return [req, res];
+      };
+    },
+    params: (cb: (b: any) => object) => {
+      return ({
+        scope
+      }: Context) => {
+        Object.assign(scope, cb(req.params));
       };
     },
     validate: (cb: (scope: any) => any[]) => {
