@@ -46,6 +46,7 @@ async function main() {
       todos: results 
     })]),
     template(() =>
+      // TODO: this seem verbose; framework should know template locations
       path.resolve(__dirname, '../public/index.html')
     ),
   ]);

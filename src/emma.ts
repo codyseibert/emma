@@ -162,7 +162,7 @@ export default async function ({
         const templatePath = cb();
         console.log('templatePath', templatePath)
         fs.readFile(templatePath, 'utf-8', (err: any, file: any) => {
-          file = file.replace('<script>', `<script>window.scope = ${JSON.stringify(scope)};`);
+          file = file.replace(/(<script[^>]+>)/, `$1window.scope = ${JSON.stringify(scope)};`);
           res.send(file);
         });
       })

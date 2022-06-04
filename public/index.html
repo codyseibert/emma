@@ -1,36 +1,32 @@
 <html>
   <head>
     <title>TODO APP</title>
-
-    
   </head>
+    
   <body>
     <h1>TODO APP</h1>
 
-    <div id="todo-items">
-
-    </div>
+    <div id="todo-items"></div>
 
     <input type="text" id="todo-text"/>
     <button id="save-btn">Save</button>
 
-    <script>
+    <script type="module">
+      import {html, render} from 'https://unpkg.com/lit-html?module';
+
       const saveBtn = document.getElementById('save-btn');
       const todoInput = document.getElementById('todo-text');
+      const todoItems = window.scope.todos;
 
-      const createTodoItem = (todo) => {
-        const todoItem = document.createElement('div');
-        todoItem.dataset.id = todo._id;
-        todoItem.classList.add('todo-item');
-        const deleteBtn = document.createElement('button');
-        deleteBtn.innerText = 'Delete';
-        deleteBtn.addEventListener('click', () => {
-          deleteTodoItem(todo._id)
-        });
-        todoItem.append(todo.text);
-        todoItem.appendChild(deleteBtn);
-        return todoItem;
-      }
+      const rerender = (todos) => {
+        render(html`
+          <ul>
+            ${todos.map(todo => html`
+              <li data-id="${todo._id}">${todo.text} <button @click=${(e) => deleteTodoItem(todo._id)}>Delete</button></li>
+            `)}
+          </ul>
+        `, document.getElementById('todo-items'));
+      };
 
       const deleteTodoItem = async (todoId) => {
         await fetch(`/api/todos/${todoId}`, {
@@ -38,11 +34,6 @@
         })
         const todoItem = document.querySelector(`[data-id="${todoId}"]`);
         todoItem.remove();
-      }
-
-      const appendTodoItem = (todoEl) => {
-        const todoItems = document.getElementById('todo-items');
-        todoItems.appendChild(todoEl);
       }
 
       saveBtn.addEventListener('click', async () => {
@@ -57,13 +48,11 @@
             completed: false
           })
         }).then(res => res.json());
-
-        appendTodoItem(createTodoItem(newTodo));
+        todoItems.push(newTodo)
+        rerender(todoItems);
       });
 
-      for (let todo of window.scope.todos) {
-        appendTodoItem(createTodoItem(todo));
-      }
+      rerender(todoItems);
     </script>
   </body>
 </html>
